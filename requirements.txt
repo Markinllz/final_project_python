@@ -1,0 +1,5 @@
+aiogram==3.13.1
+sqlalchemy[asyncio]==2.0.35
+asyncpg
+psycopg2-binary
+python-dotenv

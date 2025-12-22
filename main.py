@@ -1,7 +1,10 @@
 from fastapi import FastAPI, HTTPException
 from sqlalchemy import *
 app = FastAPI()
-engine = create_engine("postgresql+psycopg2://daniilgrecin:367564@localhost:5432/English_bot", echo=True,)
+engine = create_engine(
+    "postgresql+psycopg2://daniilgrecin:367564@localhost:5432/English_bot",
+    echo=True,
+)
 
 metadata = MetaData()
 users_table = Table(
@@ -61,6 +64,7 @@ levels_table = Table(
 )
 metadata.create_all(engine)
 
+
 @app.get("/user/{telegram_id}")
 async def get_user(telegram_id: int):
     q = (select(users_table.c.id, users_table.c.user_name)
@@ -69,12 +73,13 @@ async def get_user(telegram_id: int):
     with engine.connect() as conn:
         result = conn.execute(q)
         res = result.fetchone()
-    #print(conn.execute(select(user_table.c.tgID).where(user_table.c.tgID == a)).rowcount)
-    #conn.execute(insert(user_table).values(tgID=a, tgUsername=b))
-    #conn.commit()
+    # print(conn.execute(select(user_table.c.tgID).where(user_table.c.tgID == a)).rowcount)
+    # conn.execute(insert(user_table).values(tgID=a, tgUsername=b))
+    # conn.commit()
     if res is None:
         raise HTTPException(status_code=404, detail="User not found")
     return {'id': res.id, 'user_name': res.user_name}
+
 
 @app.post("/user/{telegram_id}/{user_name}")
 async def create_user(user_name: str, telegram_id: int):
@@ -95,6 +100,7 @@ async def create_user(user_name: str, telegram_id: int):
         conn.commit()
     return {'id': res.id, 'user_name': res.user_name}
 
+
 @app.get("/deck/{deck_id}")
 async def get_deck(deck_id: int):
     q = (select(decks_table)
@@ -106,6 +112,7 @@ async def get_deck(deck_id: int):
     if res is None:
         raise HTTPException(status_code=404, detail="Deck not found")
     return {'id': res.id, 'name': res.name, 'owner_id': res.owner_id}
+
 
 @app.post("/deck/{deck_name}/{owner_id}")
 async def create_deck(deck_name: str, owner_id: int):
@@ -127,6 +134,7 @@ async def create_deck(deck_name: str, owner_id: int):
         conn.commit()
     return {'id': res.id, 'name': res.name, 'owner_id': res.owner_id}
 
+
 @app.get("/word/{word_id}")
 async def get_word(word_id: int):
     q = (select(words_table)
@@ -137,7 +145,9 @@ async def get_word(word_id: int):
         res = result.fetchone()
     if res is None:
         raise HTTPException(status_code=404, detail="Word not found")
-    return {'id': res.id, 'deck_id': res.deck_id, 'front': res.front, 'back': res.back}
+    return {'id': res.id, 'deck_id': res.deck_id,
+            'front': res.front, 'back': res.back}
+
 
 @app.post("/word/{deck_id}/{front}/{back}")
 async def create_word(deck_id: int, front: str, back: str):
@@ -159,7 +169,9 @@ async def create_word(deck_id: int, front: str, back: str):
         result = conn.execute(q)
         res = result.fetchone()
         conn.commit()
-    return {'id': res.id, 'deck_id': res.deck_id, 'front': res.front, 'back': res.back}
+    return {'id': res.id, 'deck_id': res.deck_id,
+            'front': res.front, 'back': res.back}
+
 
 @app.get("/level/{level_id}")
 async def get_level(level_id: int):
@@ -173,6 +185,7 @@ async def get_level(level_id: int):
         raise HTTPException(status_code=404, detail="Level not found")
     return {'id': res.id, 'level_name': res.level_name}
 
+
 @app.post("/level/{level_name}")
 async def create_level(level_name: str):
     q = (insert(levels_table)
@@ -185,6 +198,7 @@ async def create_level(level_name: str):
         conn.commit()
     return {'id': res.id, 'level_name': res.level_name}
 
+
 @app.get("/user_word_stats/{user_id}/{word_id}")
 async def get_user_word_stats(user_id: int, word_id: int):
     q = (select(user_word_stats_table)
@@ -195,7 +209,9 @@ async def get_user_word_stats(user_id: int, word_id: int):
         result = conn.execute(q)
         res = result.fetchone()
     if res is None:
-        raise HTTPException(status_code=404, detail="User word stats not found")
+        raise HTTPException(
+            status_code=404,
+            detail="User word stats not found")
     return {
         'id': res.id,
         'user_id': res.user_id,
@@ -205,8 +221,10 @@ async def get_user_word_stats(user_id: int, word_id: int):
         'last_shown_at': res.last_shown_at
     }
 
+
 @app.post("/user_word_stats/{user_id}/{word_id}/{success_count}/{attempt_count}")
-async def create_user_word_stats(user_id: int, word_id: int, success_count: int, attempt_count: int):
+async def create_user_word_stats(
+        user_id: int, word_id: int, success_count: int, attempt_count: int):
     q = (select(users_table.c.id)
          .where(users_table.c.id == user_id))
     user_exists = False
