@@ -9,12 +9,13 @@ class BotStates(StatesGroup):
     choosing_level = State()
     choosing_reminder_freq = State()
 
-    deck_menu = State()
+    choosing_training_mode = State()
     choosing_deck = State()
-    creating_custom_deck = State()
-    adding_word = State()
-
-    training = State()
-    showing_answer = State()
-
+    
+    training_deck = State()
+    training_random = State()
+    training_sentences = State()
+    
+    waiting_answer = State()
+    
     viewing_progress = State()

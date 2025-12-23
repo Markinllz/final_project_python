@@ -1,10 +1,6 @@
-from fastapi import FastAPI, HTTPException
-from sqlalchemy import *
-app = FastAPI()
-engine = create_engine(
-    "postgresql+psycopg2://daniilgrecin:367564@localhost:5432/English_bot",
-    echo=True,
-)
+from api.main import app
+
+__all__ = ["app"]
 
 metadata = MetaData()
 users_table = Table(

@@ -2,13 +2,36 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMar
 
 def main_menu_kb():
     buttons = [
-        [KeyboardButton(text="📚 Тренировка"), KeyboardButton(text="🃏 Колоды")],
-        [KeyboardButton(text="➕ Добавить слова"), KeyboardButton(text="📊 Прогресс")],
+        [KeyboardButton(text="📚 Тренировка"), KeyboardButton(text="📊 Прогресс")],
         [KeyboardButton(text="⚙️ Настройки")],
     ]
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
-# Инлайн-клавиатуры для тренировки (заглушки)
+
+def training_modes_kb():
+    buttons = [
+        [KeyboardButton(text="🃏 По колоде"), KeyboardButton(text="🎲 Случайные слова")],
+        [KeyboardButton(text="📝 Предложения"), KeyboardButton(text="⬅️ Назад")],
+    ]
+    return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
+
+
+def skip_kb():
+    buttons = [
+        [KeyboardButton(text="⏭ Пропустить")],
+        [KeyboardButton(text="⏹ Закончить тренировку")],
+    ]
+    return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
+
+
+def continue_training_kb():
+    buttons = [
+        [KeyboardButton(text="➡️ Следующее слово")],
+        [KeyboardButton(text="⏹ Закончить тренировку")],
+    ]
+    return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
+
+
 def training_kb():
     buttons = [
         [InlineKeyboardButton(text="Показать перевод", callback_data="show_back"),
