@@ -70,3 +70,11 @@ class UserWordStats(Base):
             "word_id",
             name="uq_user_word"),
     )
+
+
+class Level(Base):
+    __tablename__ = "levels"
+    id: Mapped[int] = mapped_column(
+        BigInteger, primary_key=True, autoincrement=True)
+    level_name: Mapped[str] = mapped_column(
+        Text, nullable=False, unique=True)

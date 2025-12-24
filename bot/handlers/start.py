@@ -18,16 +18,13 @@ router = Router(name="start")
 @router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext,
                     session: AsyncSession):
-    # Проверяем, есть ли пользователь в БД
     result = await session.execute(
         select(User).where(User.telegram_id == message.from_user.id)
     )
     user = result.scalar_one_or_none()
 
     if user is None:
-        # Новый пользователь
         await message.answer(WELCOME_NEW)
-        # Сразу создаём в БД
         new_user = User(
             telegram_id=message.from_user.id,
             username=message.from_user.username
@@ -37,11 +34,9 @@ async def cmd_start(message: Message, state: FSMContext,
 
         text = "Профиль создан! Теперь давай настроим обучение."
     else:
-        # Возвращающийся
-        # Здесь потом добавим streak и статистику
         text = WELCOME_BACK.format(
-            streak=3,  # заглушка
-            learned=42  # заглушка
+            streak=3,
+            learned=42
         )
 
     await message.answer(text, reply_markup=main_menu_kb())
