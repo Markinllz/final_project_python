@@ -12,6 +12,7 @@ services:
       - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./english_bot_full.sql:/docker-entrypoint-initdb.d/english_bot_full.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U daniilgrecin"]
       interval: 10s
