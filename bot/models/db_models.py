@@ -78,3 +78,38 @@ class Level(Base):
         BigInteger, primary_key=True, autoincrement=True)
     level_name: Mapped[str] = mapped_column(
         Text, nullable=False, unique=True)
+
+
+class UserStats(Base):
+    __tablename__ = "user_stats"
+    id: Mapped[int] = mapped_column(
+        BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False)
+    total_sessions: Mapped[int] = mapped_column(
+        Integer, server_default="0", nullable=False)
+    current_streak: Mapped[int] = mapped_column(
+        Integer, server_default="0", nullable=False)
+    max_streak: Mapped[int] = mapped_column(
+        Integer, server_default="0", nullable=False)
+    last_active_date: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True))
+
+
+class Sentence(Base):
+    __tablename__ = "sentences"
+    id: Mapped[int] = mapped_column(
+        BigInteger, primary_key=True, autoincrement=True)
+    word_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("words.id", ondelete="CASCADE"),
+        nullable=False)
+    sentence_text: Mapped[str] = mapped_column(Text, nullable=False)
+    correct_answer: Mapped[str] = mapped_column(Text, nullable=False)
+    option1: Mapped[str] = mapped_column(Text, nullable=False)
+    option2: Mapped[str] = mapped_column(Text, nullable=False)
+    option3: Mapped[str] = mapped_column(Text, nullable=False)
+    option4: Mapped[str] = mapped_column(Text, nullable=False)

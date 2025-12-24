@@ -8,6 +8,7 @@ from bot.core.texts import WELCOME_NEW, WELCOME_BACK
 from bot.core.keyboards import main_menu_kb
 from bot.database import get_session
 from bot.models.db_models import User
+from bot.services.stats import get_user_stats
 from sqlalchemy import select
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,13 +32,15 @@ async def cmd_start(message: Message, state: FSMContext,
         )
         session.add(new_user)
         await session.commit()
-
+        await session.refresh(new_user)
+        
+        await get_user_stats(new_user.id, session)
         text = "Профиль создан! Теперь давай настроим обучение."
     else:
-        text = WELCOME_BACK.format(
-            streak=3,
-            learned=42
-        )
+        user_name = user.username or message.from_user.first_name or "друг"
+        text = WELCOME_BACK.format(name=user_name)
 
-    await message.answer(text, reply_markup=main_menu_kb())
+    from bot.core.texts import MAIN_MENU
+    await message.answer(text)
+    await message.answer(MAIN_MENU, reply_markup=main_menu_kb(), parse_mode="HTML")
     await state.set_state(BotStates.main_menu)

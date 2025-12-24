@@ -48,8 +48,8 @@ async def main():
     dp.update.middleware(db_session_middleware)
 
     dp.include_router(start.router)
-    dp.include_router(menu.router)
     dp.include_router(training.router)
+    dp.include_router(menu.router)
 
     dp.startup.register(on_startup)
 

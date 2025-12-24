@@ -1,32 +1,37 @@
 from aiogram import Router, F
-from aiogram.types import Message
+from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from random import shuffle, choice
 from datetime import datetime
+import asyncio
+import asyncio
 
 from bot.core.states import BotStates
-from bot.core.keyboards import main_menu_kb, training_modes_kb, skip_kb
-from bot.models.db_models import User, Deck, Word, UserWordStats
+from bot.core.keyboards import main_menu_kb, training_modes_kb, skip_kb, sentence_options_kb
+from bot.models.db_models import User, Deck, Word, UserWordStats, Sentence
 from bot.core.texts import DECK_DESCRIPTIONS
+from bot.services.stats import update_user_activity
 
 router = Router(name="training")
 
 
-@router.message(F.text == "📚 Тренировка", BotStates.main_menu)
+@router.message(F.text == "📚 Тренировка")
 async def choose_training_mode(message: Message, state: FSMContext):
+    from bot.core.texts import TRAINING_MODES_INFO
     await message.answer(
-        "Выбери режим тренировки:",
-        reply_markup=training_modes_kb()
+        TRAINING_MODES_INFO,
+        reply_markup=training_modes_kb(),
+        parse_mode="HTML"
     )
     await state.set_state(BotStates.choosing_training_mode)
 
 
-@router.message(F.text == "⬅️ Назад", BotStates.choosing_training_mode)
+@router.message(F.text == "⬅️ Назад")
 async def back_to_menu(message: Message, state: FSMContext):
     from bot.core.texts import MAIN_MENU
-    await message.answer(MAIN_MENU, reply_markup=main_menu_kb())
+    await message.answer(MAIN_MENU, reply_markup=main_menu_kb(), parse_mode="HTML")
     await state.set_state(BotStates.main_menu)
 
 
@@ -37,21 +42,36 @@ async def choose_deck_start(message: Message, state: FSMContext):
         decks_list.append(f"{num}. {desc}")
     
     await message.answer(
-        "Выбери колоду:\n\n" + "\n".join(decks_list) + "\n\nНапиши номер колоды (1-19):",
-        reply_markup=main_menu_kb()
+        "🃏 <b>Тренировка по колоде</b>\n\n"
+        "Выбери тему для изучения:\n\n" + "\n".join(decks_list) + 
+        "\n\nНапиши <b>номер колоды (1-19)</b> для начала тренировки.\n"
+        "Бот покажет слова из выбранной темы, тебе нужно вспомнить перевод.\n\n"
+        "💡 <i>Можно пропускать слова кнопкой 'Пропустить'</i>",
+        reply_markup=main_menu_kb(),
+        parse_mode="HTML"
     )
     await state.set_state(BotStates.choosing_deck)
 
 
 @router.message(BotStates.choosing_deck)
 async def start_deck_training(message: Message, state: FSMContext, session: AsyncSession):
+    if message.text in ["📚 Тренировка", "📊 Прогресс", "⚙️ Настройки", "⬅️ Назад"]:
+        await state.set_state(BotStates.main_menu)
+        return
+    
     if not message.text.isdigit():
-        await message.answer("Пожалуйста, введи номер колоды (1-19):")
+        await message.answer(
+            "❌ Пожалуйста, введи <b>номер колоды (1-19)</b> или используй кнопки меню",
+            parse_mode="HTML"
+        )
         return
     
     deck_num = int(message.text)
     if not (1 <= deck_num <= 19):
-        await message.answer("Неверный номер колоды. Введи число от 1 до 19:")
+        await message.answer(
+            "❌ Неверный номер колоды. Введи число от <b>1 до 19</b>",
+            parse_mode="HTML"
+        )
         return
     
     user_result = await session.execute(
@@ -99,7 +119,8 @@ async def show_deck_word(message: Message, state: FSMContext, session: AsyncSess
     
     word = words[current_index]
     await message.answer(
-        f"<b>{word['front']}</b>\n\nВспомни перевод:\n\nСлово {current_index + 1} из {len(words)}",
+        f"<b>{word['front']}</b>\n\n"
+        "Вспомни перевод и напиши его:",
         reply_markup=skip_kb(),
         parse_mode="HTML"
     )
@@ -197,9 +218,16 @@ async def process_deck_answer(message: Message, state: FSMContext, session: Asyn
 async def finish_deck_training(message: Message, state: FSMContext, session: AsyncSession):
     data = await state.get_data()
     correct = data.get("correct", 0)
-    total = data.get("total", 0)
+    
+    user_result = await session.execute(
+        select(User).where(User.telegram_id == message.from_user.id)
+    )
+    user = user_result.scalar_one_or_none()
+    if user:
+        await update_user_activity(user.id, session)
+    
     await message.answer(
-        f"🎉 Тренировка завершена!\n\nПравильно: <b>{correct}</b> из {total}",
+        f"🎉 Тренировка завершена!\n\nПравильных ответов: <b>{correct}</b>",
         reply_markup=main_menu_kb(),
         parse_mode="HTML"
     )
@@ -208,6 +236,15 @@ async def finish_deck_training(message: Message, state: FSMContext, session: Asy
 
 @router.message(F.text == "🎲 Случайные слова", BotStates.choosing_training_mode)
 async def start_random_training(message: Message, state: FSMContext, session: AsyncSession):
+    await message.answer(
+        "🎲 <b>Режим случайных слов</b>\n\n"
+        "Слова из всех колод в случайном порядке.\n"
+        "Отслеживается <b>стрик</b> — серия правильных ответов подряд.\n"
+        "Твой <b>максимальный стрик</b> = количество правильных ответов подряд.\n\n"
+        "💡 <i>При неправильном ответе или пропуске стрик сбрасывается</i>\n\n"
+        "Начинаем тренировку!",
+        parse_mode="HTML"
+    )
     user_result = await session.execute(
         select(User).where(User.telegram_id == message.from_user.id)
     )
@@ -247,12 +284,16 @@ async def show_random_word(message: Message, state: FSMContext, session: AsyncSe
     max_streak = data.get("max_streak", 0)
     
     if current_index >= len(words):
-        await finish_random_training(message, state)
+        await finish_random_training(message, state, session)
         return
     
     word = words[current_index]
     await message.answer(
-        f"<b>{word['front']}</b>\n\nВспомни перевод:\n\nТекущий стрик: {streak}\nМаксимальный стрик: {max_streak}",
+        f"<b>{word['front']}</b>\n\n"
+        "Вспомни перевод и напиши его:\n\n"
+        f"🔥 Текущий стрик: <b>{streak}</b>\n"
+        f"🏆 Максимальный стрик: <b>{max_streak}</b>\n\n"
+        "💡 <i>При правильном ответе стрик увеличивается, при ошибке — сбрасывается</i>",
         reply_markup=skip_kb(),
         parse_mode="HTML"
     )
@@ -264,7 +305,7 @@ async def process_random_answer(message: Message, state: FSMContext, session: As
     data = await state.get_data()
     
     if message.text == "⏹ Закончить тренировку":
-        await finish_random_training(message, state)
+        await finish_random_training(message, state, session)
         return
     
     if message.text == "⏭ Пропустить":
@@ -360,9 +401,16 @@ async def process_random_answer(message: Message, state: FSMContext, session: As
     await show_random_word(message, state, session)
 
 
-async def finish_random_training(message: Message, state: FSMContext):
+async def finish_random_training(message: Message, state: FSMContext, session: AsyncSession):
     data = await state.get_data()
     max_streak = data.get("max_streak", 0)
+    
+    user_result = await session.execute(
+        select(User).where(User.telegram_id == message.from_user.id)
+    )
+    user = user_result.scalar_one_or_none()
+    if user:
+        await update_user_activity(user.id, session)
     
     await message.answer(
         f"🎉 Тренировка завершена!\n\nМаксимальный стрик: <b>{max_streak}</b>",
@@ -374,6 +422,14 @@ async def finish_random_training(message: Message, state: FSMContext):
 
 @router.message(F.text == "📝 Предложения", BotStates.choosing_training_mode)
 async def start_sentences_training(message: Message, state: FSMContext, session: AsyncSession):
+    await message.answer(
+        "📝 <b>Режим предложений</b>\n\n"
+        "Тебе будет показано предложение с пропущенным словом (___).\n"
+        "Выбери правильный вариант из четырех предложенных.\n\n"
+        "💡 <i>Можно пропускать предложения кнопкой 'Пропустить'</i>\n\n"
+        "Начинаем тренировку!",
+        parse_mode="HTML"
+    )
     user_result = await session.execute(
         select(User).where(User.telegram_id == message.from_user.id)
     )
@@ -384,47 +440,34 @@ async def start_sentences_training(message: Message, state: FSMContext, session:
         await state.set_state(BotStates.main_menu)
         return
     
-    result = await session.execute(select(Word))
-    all_words = result.scalars().all()
+    result = await session.execute(select(Sentence))
+    all_sentences = result.scalars().all()
     
-    if not all_words:
-        await message.answer("В базе нет слов для тренировки.")
+    if not all_sentences:
+        await message.answer("В базе нет предложений для тренировки.")
         return
     
     sentences_list = []
-    sentence_templates = [
-        "I need to {back} the meeting tomorrow.",
-        "She likes to {back} in the morning.",
-        "They decided to {back} this project.",
-        "We should {back} before making a decision.",
-        "He wants to {back} his English skills.",
-        "Can you {back} me with this task?",
-        "Let's {back} at the restaurant tonight.",
-        "She will {back} the presentation next week.",
-        "I can't {back} without your help.",
-        "They plan to {back} next month."
-    ]
-    
-    for word in all_words:
-        template = choice(sentence_templates)
-        full_sentence = template.format(back=word.back)
-        sentence_with_gap = full_sentence.replace(word.back, "___")
+    for sentence in all_sentences:
         sentences_list.append({
-            "id": word.id,
-            "front": word.front,
-            "back": word.back,
-            "sentence": full_sentence,
-            "sentence_with_gap": sentence_with_gap
+            "id": sentence.id,
+            "word_id": sentence.word_id,
+            "sentence_text": sentence.sentence_text,
+            "correct_answer": sentence.correct_answer,
+            "option1": sentence.option1,
+            "option2": sentence.option2,
+            "option3": sentence.option3,
+            "option4": sentence.option4
         })
     
     shuffle(sentences_list)
+    selected_sentences = sentences_list[:20]
     
     await state.update_data(
         mode="sentences",
-        sentences=sentences_list,
+        sentences=selected_sentences,
         current_index=0,
-        correct=0,
-        total=len(sentences_list)
+        correct=0
     )
     
     await show_sentence(message, state, session)
@@ -436,68 +479,181 @@ async def show_sentence(message: Message, state: FSMContext, session: AsyncSessi
     current_index = data["current_index"]
     
     if current_index >= len(sentences):
-        await finish_sentences_training(message, state)
+        await finish_sentences_training(message, state, session)
         return
     
     sentence_data = sentences[current_index]
     
+    options = [
+        sentence_data['option1'],
+        sentence_data['option2'],
+        sentence_data['option3'],
+        sentence_data['option4']
+    ]
+    
+    correct_answer = sentence_data['correct_answer']
+    correct_pos = None
+    for i, opt in enumerate(options):
+        if opt.lower() == correct_answer.lower():
+            correct_pos = i
+            break
+    
+    if correct_pos is None:
+        options[0] = correct_answer
+        correct_pos = 0
+    
+    shuffle_indices = list(range(4))
+    shuffle(shuffle_indices)
+    shuffled_options = [options[i] for i in shuffle_indices]
+    new_correct_pos = shuffle_indices.index(correct_pos)
+    
+    await state.update_data(
+        current_sentence_id=sentence_data['id'],
+        current_word_id=sentence_data['word_id'],
+        current_options=shuffled_options,
+        correct_position=new_correct_pos
+    )
+    
     await message.answer(
-        f"{sentence_data['sentence_with_gap']}\n\nВпиши пропущенное слово:\n\nПредложение {current_index + 1} из {len(sentences)}",
-        reply_markup=skip_kb()
+        f"<b>{sentence_data['sentence_text']}</b>\n\n"
+        "Выбери правильный вариант:",
+        reply_markup=sentence_options_kb(shuffled_options, current_index),
+        parse_mode="HTML"
     )
     await state.set_state(BotStates.training_sentences)
 
 
-@router.message(BotStates.training_sentences)
-async def process_sentence_answer(message: Message, state: FSMContext, session: AsyncSession):
+@router.callback_query(F.data.startswith("sentence_option:"), BotStates.training_sentences)
+async def process_sentence_answer(callback: CallbackQuery, state: FSMContext, session: AsyncSession):
     data = await state.get_data()
-    
-    if message.text == "⏹ Закончить тренировку":
-        await finish_sentences_training(message, state)
-        return
-    
-    if message.text == "⏭ Пропустить":
-        sentences = data["sentences"]
-        current_index = data["current_index"]
-        sentence_data = sentences[current_index]
-        await message.answer(
-            f"Правильный ответ: <b>{sentence_data['back']}</b>\n\n{sentence_data['sentence']}",
-            parse_mode="HTML"
-        )
-        await state.update_data(current_index=current_index + 1)
-        await show_sentence(message, state, session)
-        return
+    selected_option = int(callback.data.split(":")[1])
+    correct_position = data.get("correct_position")
     
     sentences = data["sentences"]
     current_index = data["current_index"]
     sentence_data = sentences[current_index]
+    options = data.get("current_options", [])
+    word_id = data.get("current_word_id")
     
-    user_answer = message.text.strip().lower()
-    correct_answer = sentence_data["back"].lower()
+    user_result = await session.execute(
+        select(User).where(User.telegram_id == callback.from_user.id)
+    )
+    user = user_result.scalar_one_or_none()
     
-    is_correct = user_answer == correct_answer
+    if selected_option >= len(options):
+        await callback.answer("Ошибка: неверный вариант", show_alert=True)
+        return
+    
+    selected_word = options[selected_option]
+    correct_word = sentence_data['correct_answer']
+    
+    is_correct = (selected_option == correct_position) and (selected_word.lower() == correct_word.lower())
     
     if is_correct:
-        await message.answer("✅ Правильно!")
-        correct = data.get("correct", 0) + 1
-        await state.update_data(correct=correct)
-    else:
-        await message.answer(
-            f"❌ Неправильно. Правильный ответ: <b>{sentence_data['back']}</b>\n\n{sentence_data['sentence']}",
+        await callback.message.edit_text(
+            f"<b>{sentence_data['sentence_text']}</b>\n\n"
+            f"✅ <b>Правильно!</b> Ответ: <b>{sentence_data['correct_answer']}</b>",
             parse_mode="HTML"
         )
+        correct = data.get("correct", 0) + 1
+        await state.update_data(correct=correct)
+        
+        if word_id:
+            stats_result = await session.execute(
+                select(UserWordStats)
+                .where(UserWordStats.user_id == user.id)
+                .where(UserWordStats.word_id == word_id)
+            )
+            stats = stats_result.scalar_one_or_none()
+            
+            if stats:
+                stats.success_count += 1
+                stats.attempt_count += 1
+                stats.last_shown_at = datetime.utcnow()
+            else:
+                stats = UserWordStats(
+                    user_id=user.id,
+                    word_id=word_id,
+                    success_count=1,
+                    attempt_count=1,
+                    last_shown_at=datetime.utcnow()
+                )
+                session.add(stats)
+            await session.commit()
+    else:
+        await callback.message.edit_text(
+            f"<b>{sentence_data['sentence_text']}</b>\n\n"
+            f"❌ Неправильно. Правильный ответ: <b>{sentence_data['correct_answer']}</b>",
+            parse_mode="HTML"
+        )
+        
+        if word_id:
+            stats_result = await session.execute(
+                select(UserWordStats)
+                .where(UserWordStats.user_id == user.id)
+                .where(UserWordStats.word_id == word_id)
+            )
+            stats = stats_result.scalar_one_or_none()
+            
+            if stats:
+                stats.attempt_count += 1
+                stats.last_shown_at = datetime.utcnow()
+            else:
+                stats = UserWordStats(
+                    user_id=user.id,
+                    word_id=word_id,
+                    success_count=0,
+                    attempt_count=1,
+                    last_shown_at=datetime.utcnow()
+                )
+                session.add(stats)
+            await session.commit()
     
+    await callback.answer()
     await state.update_data(current_index=current_index + 1)
-    await show_sentence(message, state, session)
+    await asyncio.sleep(1.5)
+    await show_sentence(callback.message, state, session)
 
 
-async def finish_sentences_training(message: Message, state: FSMContext):
+@router.callback_query(F.data == "sentence_skip", BotStates.training_sentences)
+async def skip_sentence(callback: CallbackQuery, state: FSMContext, session: AsyncSession):
+    data = await state.get_data()
+    sentences = data["sentences"]
+    current_index = data["current_index"]
+    sentence_data = sentences[current_index]
+    
+    await callback.message.edit_text(
+        f"<b>{sentence_data['sentence_text']}</b>\n\n"
+        f"Правильный ответ: <b>{sentence_data['correct_answer']}</b>",
+        parse_mode="HTML"
+    )
+    await callback.answer()
+    await state.update_data(current_index=current_index + 1)
+    await asyncio.sleep(1.5)
+    await show_sentence(callback.message, state, session)
+
+
+@router.callback_query(F.data == "sentence_finish", BotStates.training_sentences)
+async def finish_sentences_from_callback(callback: CallbackQuery, state: FSMContext, session: AsyncSession):
+    await callback.answer()
+    await finish_sentences_training(callback.message, state, session)
+
+
+
+
+async def finish_sentences_training(message: Message, state: FSMContext, session: AsyncSession):
     data = await state.get_data()
     correct = data.get("correct", 0)
-    total = data.get("total", 0)
+    
+    user_result = await session.execute(
+        select(User).where(User.telegram_id == message.from_user.id)
+    )
+    user = user_result.scalar_one_or_none()
+    if user:
+        await update_user_activity(user.id, session)
     
     await message.answer(
-        f"🎉 Тренировка завершена!\n\nПравильно: <b>{correct}</b> из {total}",
+        f"🎉 Тренировка завершена!\n\nПравильных ответов: <b>{correct}</b>",
         reply_markup=main_menu_kb(),
         parse_mode="HTML"
     )

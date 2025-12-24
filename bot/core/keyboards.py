@@ -3,7 +3,6 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMar
 def main_menu_kb():
     buttons = [
         [KeyboardButton(text="📚 Тренировка"), KeyboardButton(text="📊 Прогресс")],
-        [KeyboardButton(text="⚙️ Настройки")],
     ]
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
@@ -49,4 +48,22 @@ def rating_kb():
         [InlineKeyboardButton(text="Сложно 🟠", callback_data="ease:hard"),
          InlineKeyboardButton(text="Забыл 🔴", callback_data="ease:again")],
     ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def sentence_options_kb(options, current_index):
+    buttons = []
+    for i, option in enumerate(options):
+        buttons.append([InlineKeyboardButton(
+            text=option,
+            callback_data=f"sentence_option:{i}"
+        )])
+    buttons.append([InlineKeyboardButton(
+        text="⏭ Пропустить",
+        callback_data="sentence_skip"
+    )])
+    buttons.append([InlineKeyboardButton(
+        text="⏹ Закончить тренировку",
+        callback_data="sentence_finish"
+    )])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
