@@ -1,5 +1,7 @@
 from aiogram import Router, F
 from aiogram.types import Message
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from bot.core.states import BotStates
 from bot.core.texts import MAIN_MENU
 from bot.core.keyboards import main_menu_kb

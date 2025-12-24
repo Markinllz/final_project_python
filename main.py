@@ -1,9 +1,11 @@
 from fastapi import FastAPI, HTTPException
 from sqlalchemy import *
+from bot.config import DATABASE_URL
+
 app = FastAPI()
 engine = create_engine(
-    "postgresql+psycopg2://daniilgrecin:367564@localhost:5432/English_bot",
-    echo=True,
+    DATABASE_URL.replace("asyncpg", "psycopg2"),
+    echo = True
 )
 
 metadata = MetaData()
@@ -12,14 +14,14 @@ users_table = Table(
     metadata,
     Column("id", BigInteger, primary_key=True, autoincrement=True),
     Column("telegram_id", BigInteger, unique=True),
-    Column("user_name", Text),
+    Column("username", Text),
 )
 decks_table = Table(
     "decks",
     metadata,
     Column("id", BigInteger, primary_key=True, autoincrement=True),
     Column("name", Text, nullable=False),
-    Column("type", Text, nullable=False, server_default="custom"),
+    #Column("type", Text, nullable=False, server_default="custom"),
     Column("owner_id", BigInteger, ForeignKey("users.id")))
 words_table = Table(
     "words",
@@ -62,12 +64,12 @@ levels_table = Table(
     Column("id", BigInteger, primary_key=True, autoincrement=True),
     Column("level_name", Text, nullable=False, unique=True)
 )
-metadata.create_all(engine)
+#metadata.create_all(engine)
 
 
 @app.get("/user/{telegram_id}")
 async def get_user(telegram_id: int):
-    q = (select(users_table.c.id, users_table.c.user_name)
+    q = (select(users_table.c.id, users_table.c.username)
          .where(users_table.c.telegram_id == telegram_id))
     res = 0
     with engine.connect() as conn:
@@ -78,12 +80,12 @@ async def get_user(telegram_id: int):
     # conn.commit()
     if res is None:
         raise HTTPException(status_code=404, detail="User not found")
-    return {'id': res.id, 'user_name': res.user_name}
+    return {'id': res.id, 'user_name': res.username}
 
 
 @app.post("/user/{telegram_id}/{user_name}")
 async def create_user(user_name: str, telegram_id: int):
-    q = (select(users_table.c.id, users_table.c.user_name)
+    q = (select(users_table.c.id, users_table.c.username)
          .where(users_table.c.telegram_id == telegram_id))
     res = 0
     with engine.connect() as conn:
@@ -92,13 +94,13 @@ async def create_user(user_name: str, telegram_id: int):
     if res is not None:
         raise HTTPException(status_code=400, detail="User allready exists")
     q = (insert(users_table)
-         .values(user_name=user_name, telegram_id=telegram_id)
-         .returning(users_table.c.id, users_table.c.user_name))
+         .values(username=user_name, telegram_id=telegram_id)
+         .returning(users_table.c.id, users_table.c.username))
     with engine.connect() as conn:
         result = conn.execute(q)
         res = result.fetchone()
         conn.commit()
-    return {'id': res.id, 'user_name': res.user_name}
+    return {'id': res.id, 'user_name': res.username}
 
 
 @app.get("/deck/{deck_id}")
