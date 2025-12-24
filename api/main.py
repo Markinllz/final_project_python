@@ -29,9 +29,9 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    logger.info("База данных инициализирована")
+    #async with engine.begin() as conn:
+    #    await conn.run_sync(Base.metadata.create_all)
+    #logger.info("База данных инициализирована")
     yield
     await engine.dispose()
     logger.info("Подключения к БД закрыты")
